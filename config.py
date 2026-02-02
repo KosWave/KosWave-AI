@@ -21,16 +21,19 @@ class Config:
     # ChromaDB 설정
     CHROMA_DB_PATH = os.getenv('CHROMA_DB_PATH', './data/chroma_db')
     CHROMA_COLLECTION_NAME = os.getenv('CHROMA_COLLECTION_NAME', 'stocks')
+    CHROMA_NEWS_COLLECTION_NAME = os.getenv('CHROMA_NEWS_COLLECTION_NAME', 'news')
+
     
     # 주식 데이터 파일 경로
     STOCK_DATA_PATH = os.getenv('STOCK_DATA_PATH', './data/stock_info.json')
+    NEWS_DATA_PATH = os.getenv('NEWS_DATA_PATH', './data/news.json')
 
     # 검색 설정
     MAX_SEARCH_RESULTS = int(os.getenv('MAX_SEARCH_RESULTS', 10))
     
     # Retrieval 설정 (Recall을 크게 해서 후보군 누락 방지)
-    RECALL_K = int(os.getenv('RECALL_K', '50'))
-    RERANK_TOP_K = int(os.getenv('RERANK_TOP_K', '15'))
+    RECALL_K = int(os.getenv('RECALL_K', '30'))
+    RERANK_TOP_K = int(os.getenv('RERANK_TOP_K', '12'))
 
     @staticmethod
     def validate():

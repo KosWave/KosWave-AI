@@ -5,6 +5,7 @@ instance/*
 
 .idea
 
+
 .DS_Store
 __pycache__
 .venv
@@ -13,4 +14,4 @@ __pycache__
 .env
 .env.local  
 
-./data/chroma_db
+./data/chroma_db/*

@@ -16,9 +16,18 @@ class RerankResult(BaseModel):
     items: List[RerankItem]
 
 
+class NewsItem(BaseModel):
+    """News item related to a stock"""
+    title: str = Field(..., description="뉴스 제목")
+    content: str = Field(..., description="뉴스 내용")
+    link: str = Field(..., description="뉴스 링크")
+    published_date: str = Field(..., description="발행 날짜")
+
+
 class StockRecommendation(BaseModel):
     """Final stock recommendation - API response format"""
     name: str = Field(..., description="종목명")
     code: str = Field(..., description="종목 코드")
     description: str = Field(..., description="유사한 이유 설명 (AI가 작성함)")
     similarity: float = Field(..., ge=0.0, le=1.0, description="유사도 점수 (0.0~1.0)")
+    news: List[NewsItem] = Field(default_factory=list, description="관련 뉴스 리스트")
