@@ -2,5 +2,12 @@
 instance/*
 !instance/.gitignore
 .webassets-cache
-.env
 
+.DS_Store
+__pycache__
+.venv
+.vscode
+.idea
+.env.example
+.env
+.env.local  

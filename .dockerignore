@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+KosWave-AI/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files (보안상 제외, 환경 변수로 주입)
+.env
+.env.local
+.env.*.local
+
+# ChromaDB (런타임에 생성됨)
+data/chroma_db/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Documentation
+README.md
+*.md
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# MacOS
+.DS_Store
+
+# Logs
+*.log
+
+# Sample data (프로덕션에서는 실제 데이터 사용)
+stock_info.json
