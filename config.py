@@ -15,7 +15,8 @@ class Config:
     EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')
     
     # LLM 모델 설정 (temperature 0으로 고정하여 추천 결과 흔들림 방지)
-    LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-4o-mini')
+    # LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-4o-mini')
+    LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
     LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0.0'))
 
     # ChromaDB 설정
