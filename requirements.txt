@@ -9,7 +9,9 @@ langchain-openai>=0.1.7
 langchain-community>=0.0.32
 chromadb>=0.4.24
 pydantic>=2.5.0
-openai>=1.10.0 
+openai>=1.10.0
+anthropic>=0.18.0
+requests>=2.31.0
 python-dotenv
 langchain_chroma
 dotenv

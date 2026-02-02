@@ -103,58 +103,87 @@ class StockRecommendationService:
         expanded_query = self.query_expander.expand(keyword)
         print(f"🧠 expanded_query = {expanded_query}\n")
         
-        # 2-1. 주식 정보 Retrieval (Recall)
+        # 2-1. 주식 정보 Retrieval (Recall) - 대량 검색
         docs_with_scores = self.vector_store.similarity_search_with_score(
             expanded_query, 
             k=Config.RECALL_K
         )
         
-        # 2-2. 뉴스 데이터 Retrieval (키워드 기반)
+        # 2-2. 뉴스 데이터 Retrieval
         news_docs_with_scores = self.vector_store.search_news_by_keyword(
             expanded_query,
-            k=30  # 뉴스는 더 많이 검색하여 다양한 종목 커버
+            k=30 
         )
         
-        # 뉴스에서 추출한 종목 코드 집합
+        # 뉴스 매핑을 위한 코드 집합 생성
         news_stock_codes = set()
         for doc, _ in news_docs_with_scores:
             news_stock_codes.add(doc.metadata.get('code'))
         
-        print(f"📰 뉴스에서 발견된 종목 수: {len(news_stock_codes)}")
+        print(f"📋 1차 검색 완료 (주식 {len(docs_with_scores)}개, 뉴스 {len(news_docs_with_scores)}개)")
+
+        # 3. Jina Reranking 적용
+        print("🚀 Jina Reranking 수행 중...")
         
-        # 디버깅 로그
-        print("📋 Recall Top 10 (distance 낮을수록 유사):")
-        for i, (doc, distance) in enumerate(docs_with_scores[:10], 1):
+        # 문서 텍스트 리스트 준비
+        documents_for_rerank = []
+        for doc, _ in docs_with_scores:
             m = doc.metadata
-            in_news = "📰" if m['code'] in news_stock_codes else "  "
-            print(f"  {i:02d}. dist={distance:.4f} | {m['name']}({m['code']}) | {m['industry']} {in_news}")
-        print()
+            content = f"{m['name']} ({m['code']}) | {m.get('description', '')[:200]}"
+            documents_for_rerank.append(content)
+            
+        reranked_docs_with_scores = []
+        try:
+            import requests
+            
+            url = "https://api.jina.ai/v1/rerank"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {Config.JINA_API_KEY}"
+            }
+            payload = {
+                "model": "jina-reranker-v2-base-multilingual",
+                "query": expanded_query,
+                "documents": documents_for_rerank,
+                "top_n": Config.RERANK_TOP_K
+            }
+            
+            response = requests.post(url, headers=headers, json=payload)
+            
+            if response.status_code == 200:
+                results = response.json()['results']
+                print(f"📊 Rerank Top {Config.RERANK_TOP_K}:")
+                
+                for idx, result in enumerate(results):
+                    original_index = result['index']
+                    relevance_score = result['relevance_score']
+                    original_doc = docs_with_scores[original_index][0]
+                    
+                    # (doc, score) 튜플 형태로 저장
+                    reranked_docs_with_scores.append((original_doc, relevance_score))
+                    
+                    m = original_doc.metadata
+                    in_news = "📰" if m['code'] in news_stock_codes else "  "
+                    print(f"  {idx+1:02d}. score={relevance_score:.4f} | {m['name']} {in_news}")
+            else:
+                raise Exception(f"API Error: {response.text}")
+                
+        except Exception as e:
+            print(f"⚠️ Jina Rerank 실패 (Fallback 수행): {e}")
+            # 실패 시 검색 점수대로 상위 K개 사용
+            for i, (doc, score) in enumerate(docs_with_scores[:Config.RERANK_TOP_K]):
+                reranked_docs_with_scores.append((doc, score))
+
+        # 4. Final Recommendation (Claude Haiku)
+        # 이미 Reranker가 검증했으므로 LLM은 '설명 생성'과 '최종 포맷팅'에 집중
         
-        # 3. Reranking (뉴스 정보를 컨텍스트에 추가)
-        candidates_text = self._format_candidates_for_rerank(docs_with_scores, news_docs_with_scores)
-        reranked = self.rerank_chain.invoke({
-            "keyword": keyword,
-            "candidates": candidates_text
-        })
-        
-        # 점수순 정렬
-        reranked_items = sorted(reranked["items"], key=lambda x: x["score"], reverse=True)
-        
-        print("🏁 Rerank Top 10:")
-        for i, item in enumerate(reranked_items[:10], 1):
-            print(f"  {i:02d}. score={item['score']:3d} | {item['stockName']}({item['stockCode']}) | evidence={item['evidence']}")
-        print()
-        
-        # 4. Final Recommendation (뉴스 없이 빠르게 처리)
-        reranked_for_final = json.dumps(
-            {"items": reranked_items[:Config.RERANK_TOP_K]}, 
-            ensure_ascii=False
-        )
+        candidates_text = self._format_candidates_for_rerank(reranked_docs_with_scores, news_docs_with_scores)
+
         
         print("🤖 LLM 최종 추천 생성 중...")
         final_result = self.final_chain.invoke({
             "keyword": keyword,
-            "reranked": reranked_for_final,
+            "reranked": candidates_text,
             "max_results": Config.MAX_SEARCH_RESULTS
         })
         

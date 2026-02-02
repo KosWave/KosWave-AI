@@ -32,15 +32,33 @@ class Config:
     # 검색 설정
     MAX_SEARCH_RESULTS = int(os.getenv('MAX_SEARCH_RESULTS', 10))
     
-    # Retrieval 설정 (Recall을 크게 해서 후보군 누락 방지)
-    RECALL_K = int(os.getenv('RECALL_K', '30'))
-    RERANK_TOP_K = int(os.getenv('RERANK_TOP_K', '12'))
+    # Retrieval 설정
+    # Reranker를 사용하므로 Recall을 넉넉하게 잡음 (100개 검색 -> Reranker로 압축)
+    RECALL_K = int(os.getenv('RECALL_K', '100'))
+    # Reranking 후 LLM에게 넘길 최종 후보 수
+    RERANK_TOP_K = int(os.getenv('RERANK_TOP_K', '15'))
+
+    # Anthropic 설정 (LLM 사용)
+    ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+    if not ANTHROPIC_API_KEY:
+        raise ValueError("ANTHROPIC_API_KEY 환경 변수가 설정되지 않았습니다.")
+    
+    # Jina 설정 (Reranking 사용)
+    JINA_API_KEY = os.getenv('JINA_API_KEY')
+    # if not JINA_API_KEY:
+    #     raise ValueError("JINA_API_KEY 환경 변수가 설정되지 않았습니다.")
 
     @staticmethod
     def validate():
         """필수 설정 검증"""
         if not Config.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is not set in .env file")
+
+        if not Config.ANTHROPIC_API_KEY:
+            raise ValueError("ANTHROPIC_API_KEY 환경 변수가 설정되지 않았습니다.")
+        
+        # if not Config.COHERE_API_KEY:
+        #     raise ValueError("COHERE_API_KEY 환경 변수가 설정되지 않았습니다.")
 
         # ChromaDB 디렉토리 생성
         os.makedirs(Config.CHROMA_DB_PATH, exist_ok=True)
