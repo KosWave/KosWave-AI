@@ -14,7 +14,7 @@ services:
       # Flask 설정
       - FLASK_ENV=production
       - FLASK_DEBUG=False
-      - SECRET_KEY=${SECRET_KEY:-default-secret-key-change-in-production}
+#      - SECRET_KEY=${SECRET_KEY:-default-secret-key-change-in-production}
       
       # Embedding & LLM 설정
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}

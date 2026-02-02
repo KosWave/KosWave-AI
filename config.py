@@ -5,7 +5,7 @@ load_dotenv()
 
 class Config:
     # Flask 설정
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
+    # SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
     DEBUG = os.getenv('FLASK_DEBUG', 'False') == 'True'
 
     # OpenAI 설정
@@ -29,7 +29,7 @@ class Config:
     MAX_SEARCH_RESULTS = int(os.getenv('MAX_SEARCH_RESULTS', 10))
     
     # Retrieval 설정 (Recall을 크게 해서 후보군 누락 방지)
-    RECALL_K = int(os.getenv('RECALL_K', '60'))
+    RECALL_K = int(os.getenv('RECALL_K', '50'))
     RERANK_TOP_K = int(os.getenv('RERANK_TOP_K', '15'))
 
     @staticmethod

@@ -64,6 +64,7 @@ class StockRecommendationService:
 - similarity는 0.0~1.0 사이 값 (점수가 높을수록 1.0에 가깝게)
 - 최대 {max_results}개까지 선정
 - 출력은 JSON 배열 형식
+- 출력하는 JSON 배열의 관련주 후보는 10개로 고정.
 
 키워드: {keyword}
 
@@ -122,6 +123,7 @@ class StockRecommendationService:
         
         # 3. Reranking
         candidates_text = self._format_candidates_for_rerank(docs_with_scores)
+        # print("candidates_text", candidates_text)
         reranked = self.rerank_chain.invoke({
             "keyword": keyword,
             "candidates": candidates_text
