@@ -11,3 +11,5 @@ __pycache__
 .env.example
 .env
 .env.local  
+
+./data/chroma_db
