@@ -16,7 +16,7 @@ class Config:
     
     # LLM 모델 설정 (temperature 0으로 고정하여 추천 결과 흔들림 방지)
     # LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-4o-mini')
-    LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
+    LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-5-mini-2025-08-07')
     LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0.0'))
 
     # ChromaDB 설정
@@ -33,7 +33,7 @@ class Config:
     MAX_SEARCH_RESULTS = int(os.getenv('MAX_SEARCH_RESULTS', 10))
     
     # Retrieval 설정 (Recall을 크게 해서 후보군 누락 방지)
-    RECALL_K = int(os.getenv('RECALL_K', '30'))
+    RECALL_K = int(os.getenv('RECALL_K', '20'))
     RERANK_TOP_K = int(os.getenv('RERANK_TOP_K', '12'))
 
     @staticmethod

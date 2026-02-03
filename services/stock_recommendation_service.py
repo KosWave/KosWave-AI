@@ -4,7 +4,7 @@ from typing import List, Dict
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from models.schemas import RerankItem, RerankResult, StockRecommendation
+from models.schemas import StockRecommendation
 from utils.query_expander import QueryExpander
 from services.vector_store_service import VectorStoreService
 from config import Config
@@ -25,59 +25,24 @@ class StockRecommendationService:
             openai_api_key=Config.OPENAI_API_KEY
         )
         
-        # Rerank Chain
-        self.rerank_parser = JsonOutputParser(pydantic_object=RerankResult)
-        self.rerank_prompt = ChatPromptTemplate.from_template("""
-너는 '관련주 후보 재랭커(reranker)'야.
-입력 키워드와 후보 종목들의 설명을 보고, 각 후보가 키워드와 얼마나 직접적으로 관련 있는지 점수화해.
-
-규칙:
-- 점수는 0~100.
-- "억지 연결"은 점수를 낮게.
-- evidence는 반드시 주어진 종목 설명에 근거하여 2~3줄 내외로 간결히 작성할 것.
-- 모르면 낮게(0~30) 줘.
-
-{format_instructions}
-
-키워드: {keyword}
-
-후보:
-{candidates}
-""")
-        
-        self.rerank_chain = (
-            self.rerank_prompt.partial(format_instructions=self.rerank_parser.get_format_instructions())
-            | self.llm
-            | self.rerank_parser
-        )
-        
-        # Final Recommendation Chain
+        # One-Shot Recommendation Chain (Selection + Explanation)
         self.final_prompt = ChatPromptTemplate.from_template("""
-금융 전문가로서 키워드 관련 종목 10개를 선정하고 JSON 배열로만 출력.
-
-규칙:
-- 후보 리스트에 있는 종목만 선택
-- description은 evidence 기반으로 키워드 연관성 제시 (2줄 이내)
-- similarity는 0.0~1.0 (점수 높을수록 1.0)
-- 정확히 10개 선정
-
 키워드: {keyword}
 
-후보 (점수순):
-{reranked}
+관련주 후보:
+{candidates}
 
-출력 예시:
+지시사항:
+1. 위 후보 중 키워드와 가장 연관성 높은 6개 종목을 선정하세요.
+2. 각 종목 선정 이유(description)를 1문장으로 핵심만 간단하게 요약하세요.
+3. 연관성 점수(similarity)는 0.0~1.0입니다.
+4. 아래 JSON 포맷으로 출력하세요. (JSON만 출력)
+
 [
   {{
-    "name": "삼성전자",
-    "code": "005930",
-    "description": "반도체 업계를 선도하는 기업으로, DRAM과 낸드 메모리에서 세계 1위를 차지하고 있습니다.",
-    "similarity": 0.97
-  }},
-  {{
-    "name": "SK하이닉스",
-    "code": "000660",
-    "description": "메모리 반도체 분야의 글로벌 리더로, DRAM 및 낸드 플래시 생산에 주력하고 있습니다.",
+    "name": "종목명",
+    "code": "종목코드",
+    "description": "핵심 선정 이유",
     "similarity": 0.95
   }}
 ]
@@ -115,10 +80,23 @@ class StockRecommendationService:
             k=30  # 뉴스는 더 많이 검색하여 다양한 종목 커버
         )
         
-        # 뉴스에서 추출한 종목 코드 집합
-        news_stock_codes = set()
+        # 뉴스 from extraction (재활용을 위해 딕셔너리 저장)
+        stock_news_map = {}
         for doc, _ in news_docs_with_scores:
-            news_stock_codes.add(doc.metadata.get('code'))
+            code = doc.metadata.get('code')
+            news_item = {
+                "title": doc.metadata.get('title', ''),
+                "link": doc.metadata.get('link', ''),
+                "published_date": doc.metadata.get('published_date', '')
+            }
+            if code not in stock_news_map:
+                stock_news_map[code] = []
+            # 뉴스 최대 3개 저장 (최종 출력용)
+            if len(stock_news_map[code]) < 3:
+                stock_news_map[code].append(news_item)
+                
+        # 뉴스에서 추출한 종목 코드 집합
+        news_stock_codes = set(stock_news_map.keys())
         
         print(f"📰 뉴스에서 발견된 종목 수: {len(news_stock_codes)}")
         
@@ -130,36 +108,18 @@ class StockRecommendationService:
             print(f"  {i:02d}. dist={distance:.4f} | {m['name']}({m['code']}) | {m['industry']} {in_news}")
         print()
         
-        # 3. Reranking (뉴스 정보를 컨텍스트에 추가)
+        # 3. One-Shot Selection & Explanation
+        # Rerank 단계 없이 바로 후보군을 포맷팅하여 최종 추천 프롬프트에 넘김.
         candidates_text = self._format_candidates_for_rerank(docs_with_scores, news_docs_with_scores)
-        reranked = self.rerank_chain.invoke({
+        
+        print("🤖 LLM 최종 추천 생성 중... (One-Shot)")
+        final_result = self.final_chain.invoke({
             "keyword": keyword,
             "candidates": candidates_text
         })
         
-        # 점수순 정렬
-        reranked_items = sorted(reranked["items"], key=lambda x: x["score"], reverse=True)
-        
-        print("🏁 Rerank Top 10:")
-        for i, item in enumerate(reranked_items[:10], 1):
-            print(f"  {i:02d}. score={item['score']:3d} | {item['stockName']}({item['stockCode']}) | evidence={item['evidence']}")
-        print()
-        
-        # 4. Final Recommendation (뉴스 없이 빠르게 처리)
-        reranked_for_final = json.dumps(
-            {"items": reranked_items[:Config.RERANK_TOP_K]}, 
-            ensure_ascii=False
-        )
-        
-        print("🤖 LLM 최종 추천 생성 중...")
-        final_result = self.final_chain.invoke({
-            "keyword": keyword,
-            "reranked": reranked_for_final,
-            "max_results": Config.MAX_SEARCH_RESULTS
-        })
-        
-        # 5. 결과 검증 및 뉴스 추가
-        print("📰 관련 뉴스 검색 중...")
+        # 5. 결과 검증 및 뉴스 추가 (DB 재조회 없이 매핑된 뉴스 사용)
+        print("📰 관련 뉴스 매핑 중... (DB 재조회 X)")
         valid_results = []
         for rec in final_result:
             # 필수 필드 검증
@@ -168,8 +128,14 @@ class StockRecommendationService:
                 continue
             
             stock_code = rec['code']
-            news_list = self.vector_store.search_news_by_stock_code(stock_code, k=3)
-            rec['news'] = news_list
+            # 기존 뉴스 매핑 활용 (속도 최적화)
+            rec['news'] = stock_news_map.get(stock_code, [])
+            
+            # Fallback: 매핑된 뉴스가 없으면 DB 조회 (정확도 보장)
+            if not rec['news']:
+                # print(f"⚠️ 뉴스 보완 검색: {stock_code}")
+                rec['news'] = self.vector_store.search_news_by_stock_code(stock_code, k=3)
+            
             valid_results.append(rec)
         
         # 결과 출력
@@ -202,23 +168,25 @@ class StockRecommendationService:
                 title = doc.metadata.get('title', '')
                 if code not in stock_news_map:
                     stock_news_map[code] = []
-                # 뉴스 제목만 저장 (최대 3개)
-                if len(stock_news_map[code]) < 3:
+                if len(stock_news_map[code]) < 1:  # 뉴스 1개만 포함 (토큰 절약)
                     stock_news_map[code].append(title)
         
         parts = []
         for idx, (doc, distance) in enumerate(docs_with_scores, start=1):
             m = doc.metadata
-            # 토큰 폭주 방지를 위해 앞부분만 사용 (400자로 축소)
-            content = doc.page_content[:400]
+            # 토큰 폭주 방지를 위해 앞부분만 사용 (200자로 축소 - 속도 최적화)
+            content = doc.page_content[:200]
             
             # 뉴스 정보 추가
             news_section = ""
             if m['code'] in stock_news_map:
                 news_titles = stock_news_map[m['code']]
-                news_section = "\n관련 뉴스:\n" + "\n".join([f"- {title}" for title in news_titles])
+                # 뉴스 제목만 한줄로 추가
+                news_section = f" | 뉴스: {news_titles[0]}"
             
+            # 중복 제거 (page_content에 이미 종목명/산업이 있으므로 앞부분 헤더 제거)
+            # content 형식이 "종목명: ... 산업: ..." 이므로 그대로 둠
             parts.append(
-                f"[{idx}] {m['name']}({m['code']}) | 산업: {m['industry']}\n{content}{news_section}"
+                f"[{idx}] {content} (Code: {m['code']}){news_section}"
             )
         return "\n\n".join(parts)
