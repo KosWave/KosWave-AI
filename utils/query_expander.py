@@ -54,6 +54,10 @@ class QueryExpander:
         rule_result = rule_expand_keyword(keyword)
         if rule_result:
             return rule_result
+
+        # 2. 속도 우선 모드에서는 LLM 확장 생략
+        if Config.FAST_MODE:
+            return keyword
         
-        # 2. LLM 기반 확장 (fallback)
+        # 3. LLM 기반 확장 (fallback)
         return self.query_expander_chain.invoke({"keyword": keyword}).strip()
