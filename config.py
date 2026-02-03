@@ -31,9 +31,9 @@ class Config:
 
     # 검색 설정
     MAX_SEARCH_RESULTS = int(os.getenv('MAX_SEARCH_RESULTS', 10))
-    
+
     # Retrieval 설정 (Recall을 크게 해서 후보군 누락 방지)
-    RECALL_K = int(os.getenv('RECALL_K', '20'))
+    RECALL_K = int(os.getenv('RECALL_K', '15'))
     RERANK_TOP_K = int(os.getenv('RERANK_TOP_K', '12'))
 
     @staticmethod
