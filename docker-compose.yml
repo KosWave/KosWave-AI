@@ -1,0 +1,58 @@
+services:
+  koswave-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: koswave-stock-api
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+    environment:
+      # OpenAI 설정 (실제 배포 시 .env 파일이나 Docker secrets 사용)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Flask 설정
+      - FLASK_ENV=production
+      - FLASK_DEBUG=False
+#      - SECRET_KEY=${SECRET_KEY:-default-secret-key-change-in-production}
+      
+      # Embedding & LLM 설정
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.0}
+      
+      # ChromaDB 설정
+      - CHROMA_DB_PATH=/app/data/chroma_db
+      - CHROMA_COLLECTION_NAME=${CHROMA_COLLECTION_NAME:-stocks}
+      
+      # 주식 데이터 파일 경로
+      - STOCK_DATA_PATH=/app/data/stock_info.json
+      
+      # 검색 설정
+      - MAX_SEARCH_RESULTS=${MAX_SEARCH_RESULTS:-10}
+      - RECALL_K=${RECALL_K:-60}
+      - RERANK_TOP_K=${RERANK_TOP_K:-15}
+    
+    volumes:
+      # ChromaDB 데이터 영구 저장
+      - chroma_data:/app/data/chroma_db
+      # 주식 데이터 파일 마운트 (호스트에서 관리)
+      - ./data/stock_info.json:/app/data/stock_info.json:ro
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    networks:
+      - koswave-network
+
+volumes:
+  chroma_data:
+    driver: local
+
+networks:
+  koswave-network:
+    driver: bridge

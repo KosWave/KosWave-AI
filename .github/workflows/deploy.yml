@@ -1,0 +1,93 @@
+name: Deploy to Naver Cloud Platform (Docker)
+
+on:
+  push:
+    branches:
+      - search-stock-by-keyword
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 소스 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Docker Buildx 설정
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3. NCR 로그인
+      - name: Login to Naver Container Registry
+        run: |
+          echo "${{ secrets.NCR_SECRET_KEY }}" | docker login \
+            ${{ secrets.NCR_REGISTRY }} \
+            -u ${{ secrets.NCR_ACCESS_KEY }} \
+            --password-stdin
+
+      # 4. Docker 이미지 빌드
+      - name: Docker build
+        run: |
+          docker build \
+            -t ${{ secrets.NCR_REGISTRY }}/koswave-ai:latest \
+            .
+
+      # 5. Docker 이미지 NCR에 Push
+      - name: Docker push to NCR
+        run: |
+          docker push \
+            ${{ secrets.NCR_REGISTRY }}/koswave-ai:latest
+
+      # 6. Bastion을 통한 AI 서버 배포
+      - name: Deploy via Bastion Host
+        run: |
+          # SSH 디렉토리 생성
+          mkdir -p ~/.ssh
+
+          # SSH 키 저장 (CRLF 제거)
+          echo "${{ secrets.BASTION_SSH_KEY }}" | tr -d '\r' > ~/.ssh/bastion_key
+          echo "${{ secrets.AI_SSH_KEY }}" | tr -d '\r' > ~/.ssh/ai_key
+
+          chmod 600 ~/.ssh/bastion_key ~/.ssh/ai_key
+
+          # SSH Config 설정 (ProxyJump)
+          cat > ~/.ssh/config <<EOF
+          Host bastion
+            HostName ${{ secrets.BASTION_HOST }}
+            User ${{ secrets.BASTION_USER }}
+            IdentityFile ~/.ssh/bastion_key
+            StrictHostKeyChecking no
+
+          Host ai
+            HostName ${{ secrets.AI_PRIVATE_IP }}
+            User ${{ secrets.AI_USER }}
+            IdentityFile ~/.ssh/ai_key
+            ProxyJump bastion
+            StrictHostKeyChecking no
+          EOF
+
+          # AI 서버 접속 후 배포
+          ssh ai << 'ENDSSH'
+            # NCR 로그인
+            echo "${{ secrets.NCR_SECRET_KEY }}" | docker login \
+              ${{ secrets.NCR_REGISTRY }} \
+              -u ${{ secrets.NCR_ACCESS_KEY }} \
+              --password-stdin
+
+            # 기존 컨테이너 중지 및 삭제
+            docker stop koswave-ai || true
+            docker rm koswave-ai || true
+
+            # 최신 이미지 Pull
+            docker pull \
+              ${{ secrets.NCR_REGISTRY }}/koswave-ai:latest
+
+            # 컨테이너 실행
+            docker run -d \
+              --name koswave-ai \
+              --env-file /opt/koswave-ai/.env \
+              -p 5000:5000 \
+              --restart always \
+              ${{ secrets.NCR_REGISTRY }}/koswave-ai:latest
+          ENDSSH

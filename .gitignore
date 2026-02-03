@@ -2,5 +2,16 @@
 instance/*
 !instance/.gitignore
 .webassets-cache
-.env
 
+.idea
+
+
+.DS_Store
+__pycache__
+.venv
+.vscode
+.env.example
+.env
+.env.local  
+
+./data/chroma_db/*
