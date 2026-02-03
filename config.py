@@ -18,6 +18,7 @@ class Config:
     # LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-4o-mini')
     LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-5-mini-2025-08-07')
     LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0.0'))
+    FAST_LLM_MODEL = os.getenv('FAST_LLM_MODEL', 'gpt-4o-mini')
 
     # ChromaDB 설정
     CHROMA_DB_PATH = os.getenv('CHROMA_DB_PATH', './data/chroma_db')
@@ -35,6 +36,11 @@ class Config:
     # Retrieval 설정 (Recall을 크게 해서 후보군 누락 방지)
     RECALL_K = int(os.getenv('RECALL_K', '15'))
     RERANK_TOP_K = int(os.getenv('RERANK_TOP_K', '12'))
+
+    # 속도 최적화 모드
+    FAST_MODE = os.getenv('FAST_MODE', 'True') == 'True'
+    FAST_RECALL_K = int(os.getenv('FAST_RECALL_K', '8'))
+    FAST_NEWS_K = int(os.getenv('FAST_NEWS_K', '0'))
 
     @staticmethod
     def validate():

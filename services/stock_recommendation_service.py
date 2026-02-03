@@ -20,7 +20,7 @@ class StockRecommendationService:
         
         # LLM 초기화
         self.llm = ChatOpenAI(
-            model=Config.LLM_MODEL,
+            model=Config.FAST_LLM_MODEL if Config.FAST_MODE else Config.LLM_MODEL,
             temperature=Config.LLM_TEMPERATURE,
             openai_api_key=Config.OPENAI_API_KEY
         )
@@ -71,14 +71,22 @@ class StockRecommendationService:
         # 2-1. 주식 정보 Retrieval (Recall)
         docs_with_scores = self.vector_store.similarity_search_with_score(
             expanded_query, 
-            k=Config.RECALL_K
+            k=Config.FAST_RECALL_K if Config.FAST_MODE else Config.RECALL_K
         )
         
         # 2-2. 뉴스 데이터 Retrieval (키워드 기반)
-        news_docs_with_scores = self.vector_store.search_news_by_keyword(
-            expanded_query,
-            k=30  # 뉴스는 더 많이 검색하여 다양한 종목 커버
-        )
+        news_docs_with_scores = []
+        if Config.FAST_MODE:
+            if Config.FAST_NEWS_K > 0:
+                news_docs_with_scores = self.vector_store.search_news_by_keyword(
+                    expanded_query,
+                    k=Config.FAST_NEWS_K
+                )
+        else:
+            news_docs_with_scores = self.vector_store.search_news_by_keyword(
+                expanded_query,
+                k=30  # 뉴스는 더 많이 검색하여 다양한 종목 커버
+            )
         
         # 뉴스 from extraction (재활용을 위해 딕셔너리 저장)
         stock_news_map = {}
@@ -174,8 +182,9 @@ class StockRecommendationService:
         parts = []
         for idx, (doc, distance) in enumerate(docs_with_scores, start=1):
             m = doc.metadata
-            # 토큰 폭주 방지를 위해 앞부분만 사용 (200자로 축소 - 속도 최적화)
-            content = doc.page_content[:200]
+            # 토큰 폭주 방지를 위해 앞부분만 사용
+            content_limit = 120 if Config.FAST_MODE else 200
+            content = doc.page_content[:content_limit]
             
             # 뉴스 정보 추가
             news_section = ""
